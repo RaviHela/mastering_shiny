@@ -12,7 +12,7 @@ ui <- fluidPage(
   tableOutput("head")
 )
 
-options(shiny.maxRequestSize = 60*1024^2^1)
+options(shiny.maxRequestSize = 60*1024^2)
 server <- function(input, output, session) {
   data <- reactive({
     req(input$upload)
