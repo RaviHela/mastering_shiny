@@ -2,7 +2,7 @@ library(shiny)
 library(tidyverse)
 library(tidytext)
 
-source("\Users\ravihela\Documents\mastering_shiny\wrd_freq_df.R")
+source("\\Users\ravihela\Documents\mastering_shiny\wrd_freq_df.R")
 source("/Users/ravihela/Documents/mastering_shiny/bigrm_df.R")
 
 ui <- fluidPage(
@@ -12,7 +12,7 @@ ui <- fluidPage(
   tableOutput("head")
 )
 
-options(shiny.maxRequestSize = 60*1024^2)
+options(shiny.maxRequestSize = 60*1024^2^1)
 server <- function(input, output, session) {
   data <- reactive({
     req(input$upload)
