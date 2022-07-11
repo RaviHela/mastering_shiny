@@ -1,8 +1,9 @@
-
 library(shiny)
 library(tidyverse)
 library(tidytext)
 
+source("\Users\ravihela\Documents\mastering_shiny\wrd_freq_df.R")
+source("/Users/ravihela/Documents/mastering_shiny/bigrm_df.R")
 
 ui <- fluidPage(
   fileInput("upload", NULL, accept = c(".csv", ".tsv")),
@@ -37,8 +38,6 @@ server <- function(input, output, session) {
   rv$bigrm_tf_idf <- bigrm_freq_tf_idf(rv$bigrm_freq)
   
   })
-  
-  
     
   
   output$head <- renderTable({
