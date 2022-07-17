@@ -19,7 +19,9 @@ bigrm_freq_tf_idf <- function(df) {
     #get tf_idf
     count(ID, bigram) %>%
     bind_tf_idf(bigram, ID, n) %>%
-    arrange(desc(tf_idf))
+    arrange(desc(tf_idf)) %>%
+    
+    left_join(df)
   
 }
     
@@ -29,4 +31,3 @@ bigrm_freq_tf_idf <- function(df) {
     
   
   
-}
