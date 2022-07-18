@@ -1,31 +1,31 @@
-
-#calls Library
+#Load libraries ----
 library(shiny)
+library(tidyverse)
+library(tidytext)
+library(ggraph)
+library(igraph)
 
-#define user interface
-ui <- fluidPage(
-  selectInput("dataset", label = "Dataset", choices = ls("package:datasets")),
-  verbatimTextOutput("summary"),
-  tableOutput("table")
-)
+# Source functions ----
+source("//Users/ravihela/Documents/mastering_shiny/wrd_freq_df.R")
+source("//Users/ravihela/Documents/mastering_shiny/bigrm_df.R")
 
-#specify app behavior
-server <- function(input, output, session) {
+# UI design ----
+ui <- fluidPage(fluidRow(column(2, fileInput())),
+                column(2, actionButton())),
+fluidRow(column(2, numericInput()),
+         column(
+           2,
+           selectizeInput(),
+           plotOutput("wrd_frq_plot"),
+           plotOutput("bigrm_frq_plot")
+         )),
+column(
+  8,
+  sliderInput(),
+  plotOutput("bigrm_nt"),
+  column(6, dataTableOutput("dataTbl"))
   
-  # Create a reactive expression
-  dataset <- reactive({
-    get(input$dataset, "package:datasets")
-  })
   
-  #output functions 1
-  output$summary <- renderPrint({
-    summary(dataset())
-  })
+  #executes app
+  shinyApp(ui, server)
   
-  #output functions 2
-  output$table <- renderTable({
-    dataset()
-  })
-}
-#executes app
-shinyApp(ui, server)

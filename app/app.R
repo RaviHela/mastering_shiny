@@ -3,50 +3,68 @@ library(shiny)
 library(tidyverse)
 library(tidytext)
 library(ggraph)
+library(igraph)
+library(DT)
 
 # Source functions ----
 source("//Users/ravihela/Documents/mastering_shiny/wrd_freq_df.R")
 source("//Users/ravihela/Documents/mastering_shiny/bigrm_df.R")
 
 # UI design ----
-ui <- fluidPage(fluidRow(
-  column(
-    4,
-    fileInput("upload", NULL, accept = c(".csv", ".tsv")),
-    actionButton(
-      inputId = "submit",
-      label = "RUN",
-      class = "btn-primary"
-    ),fluidRow(
-    column(4, numericInput(
-      "n",
-      "Top n words",
-      value = 5,
-      min = 1,
-      step = 1
-    )),
-    column(4, selectizeInput(
-      "myselect",
-       label = "Choose Words"
-      , choices = NULL
-      , multiple = TRUE
-      # , options = list(create = TRUE)
-      # , selected = NULL
-        ))),
-    plotOutput("wrd_frq_plot"),
-    plotOutput("bigrm_frq_plot")
+ui <- fluidPage(column(3,
+  fileInput("upload", NULL, accept = c(".csv", ".tsv")),
+
+       selectInput(
+        "grpSelect",
+        "Select Group",
+        multiple = TRUE,
+        selected = c("High", "Low", "Avg"),
+        choices = c("High", "Low", "Avg")
+      ),
+    numericInput(
+        "n",
+        "Top_n words",
+        value = 10,
+        min = 1,
+        step = 1,
+        width = "100px"
+      ),
     
-    # tableOutput("head")
+      selectizeInput(
+        "myselect",
+        label = "Choose Words"
+        ,
+        choices = NULL
+        ,
+        multiple = TRUE
+      ),
+  sliderInput(
+    "ntDensity",
+    label = "Choose density",
+    min = 5,
+    max = 1000,
+    value = 20
   ),
-  column(8,
-         sliderInput("ntDensity", label = "Choose density", min = 10, max = 1000,value = 20),
-         plotOutput("bigrm_nt"))
-))
+  actionButton(
+    inputId = "submit",
+    label = "RUN",
+    class = "btn-primary"
+  ),
+  textOutput("cellText")),
+  
+  column(4,
+  plotOutput("wrd_frq_plot"),
+  plotOutput("bigrm_frq_plot"))
+  ,
+  column(5,
+    plotOutput("bigrm_nt"),
+    dataTableOutput("dataTbl"))
+  
+)
 
 # SERVER ----
 options(shiny.maxRequestSize = 60 * 1024 ^ 2)
 server <- function(input, output, session) {
-  
   #upload csv data
   data <- reactive({
     req(input$upload)
@@ -65,9 +83,10 @@ server <- function(input, output, session) {
   
   #run analysis on pressing run button
   observeEvent(input$submit, {
-    rv$data_head <- data() %>%
+    rv$data_head <- data() %>% sample_n(1000) %>%
       mutate(ID = as.character(round(ID))) %>%
       mutate(group = if_else(rating >= 4, "High", if_else(rating > 2, "Avg", "Low"))) %>%
+      filter(group %in% input$grpSelect) %>%
       select(ID, group,  reviewText)
     
     #get base analysis dataset
@@ -75,44 +94,30 @@ server <- function(input, output, session) {
     rv$bigrm_freq <- bigrm_freq_df(rv$data_head)
     rv$bigrm_tf_idf <- bigrm_freq_tf_idf(rv$bigrm_freq)
     
-    print(rv$bigrm_freq)
-    View(rv$bigrm_tf_idf)
-    
-    #get all unique words from the document
+    #get all unique words from the document ----
     rv$choices <- rv$word_freq %>%
-      select(word) %>% 
+      select(word) %>%
       unique() %>% unlist() %>% str_remove_all("^word")
     
-    #print(rv$choices)
-    #ensure that if select input has no value then use all words are  analysis
+    #ensure that if select input has no value then use all words for analysis
     if (is.null(input$myselect)) {
       rv$options = rv$choices
-      # print(rv$options)
     }
     else{
       rv$options = input$myselect
-      # print(rv$options)
     }
     updateSelectizeInput(session, "myselect", choices = rv$options)
     
+    # get IDs with relevant word ----
+    word <- rv$options
+    word_df_chose <- data.frame(word)
+    rv$relevant_ID <- word_df_chose %>%
+      inner_join(rv$word_freq) %>%
+      select(ID) %>%
+      unique() %>% unlist()
+    
     
     output$wrd_frq_plot <- renderPlot({
-      
-      #get relevant document which contains chosen word for analysis
-      word <- rv$options
-      # print(paste0("testin", word))
-      word_df_chose <- data.frame(word)
-      # print(word_df_chose)
-      
-      #get IDs with relevant word
-      rv$relevant_ID <- word_df_chose %>%
-        inner_join(rv$word_freq) %>%
-        select(ID) %>%
-        unique() %>% unlist()
-      
-      # print(rv$relevant_ID)
-
-      
       rv$word_freq %>%
         filter(ID %in% rv$relevant_ID) %>%
         left_join(rv$data_head %>%
@@ -130,23 +135,16 @@ server <- function(input, output, session) {
                word = reorder_within(word, n_tot, group)) %>%
         ggplot(aes(x = word, y = n_tot, fill = group)) + geom_col() + facet_wrap(group ~
                                                                                    ., scales = "free") +
-        coord_flip() + scale_x_reordered()
+        coord_flip() + scale_x_reordered() +  guides(fill = "none") +  theme_light()
       
     })
-    
     output$bigrm_frq_plot <- renderPlot({
-
-      #get relevant document which contains chosen word for analysis
-
       rv$bigrm_tf_idf %>%
         filter(ID %in% rv$relevant_ID) %>%
-        # left_join(rv$data_head %>%
-        #             select(ID, group) %>%
-        #             unique()) %>%
         
         #remove low tf_IDF words
         filter(tf_idf > quantile(tf_idf, 0.25, na.rm = T)) %>%
-
+        
         group_by(group, bigram) %>%
         summarise(n_tot = sum(n)) %>% ungroup() %>%
         group_by(group) %>%
@@ -155,15 +153,11 @@ server <- function(input, output, session) {
         mutate(group = as.factor(group),
                bigram = reorder_within(bigram, n_tot, group)) %>%
         ggplot(aes(x = bigram, y = n_tot, fill = group)) + geom_col() + facet_wrap(group ~
-                                                                                   ., scales = "free") +
-        coord_flip() + scale_x_reordered()
-
+                                                                                     ., scales = "free") +
+        coord_flip() + scale_x_reordered() + guides(fill = "none") +  theme_light()
+      
     })
-    
     output$bigrm_nt <- renderPlot({
-      
-      #get relevant document which contains chosen word for analysis
-      
       bigram_graph <- rv$bigrm_tf_idf %>%
         filter(ID %in% rv$relevant_ID) %>%
         
@@ -188,12 +182,49 @@ server <- function(input, output, session) {
       ggraph(bigram_graph, layout = "fr") +
         geom_edge_link() +
         geom_node_point() +
-        geom_node_text(aes(label = name), vjust = 1, hjust = 1)
-        
+        geom_node_text(aes(label = name), vjust = 1, hjust = 1) + theme_light()
+      
     })
+    output$dataTbl <- DT::renderDataTable({
+      df <- rv$data_head %>%
+        filter(ID %in% rv$relevant_ID)
+      datatable(
+        df,
+        rownames = FALSE,
+        class = "nowrap display",
+        selection = list(mode = 'single', target = "cell"),
+        filter = "bottom",
+        extensions = "Buttons",
+        options = list(
+          paging = TRUE,
+          pageLength = 10,
+          scrollX = TRUE,
+          scrollY = TRUE,
+          server = FALSE,
+          dom = 'Bfrtip',
+          buttons = c('csv', 'excel')
+        )
+      )
+      
+    })
+    
+    output$cellText <- renderPrint({
+      dtTbl <- rv$data_head %>%
+        filter(ID %in% rv$relevant_ID)
+      
+      cell <- input$dataTbl_cells_selected
+      if (!is.null(cell) && ncol(cell) != 0) {
+        dtTbl[cell[1, 1], cell[1, 2] + 1] %>% unlist()
+      } else{
+        NULL
+      }
+    })
+    
+    
     
   })
 }
+
 
 #executes app
 shinyApp(ui, server)
